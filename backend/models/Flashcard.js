@@ -1,50 +1,54 @@
-import mongoose from "mongoose";   
+import mongoose from "mongoose";
 
-const flashcardSchema = new mongoose.Schema({
+const flashcardSchema = new mongoose.Schema(
+  {
     userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
     documentId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Document",
-        required: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Document",
+      required: true,
     },
-    cards: [{
+    cards: [
+      {
         question: {
-            type: String,
-            required: true
+          type: String,
+          required: true,
         },
         answer: {
-            type: String,
-            required: true
+          type: String,
+          required: true,
         },
         difficulty: {
-            type: String,
-            enum: ['easy', 'medium', 'hard'],
-            default: 'medium'
+          type: String,
+          enum: ["easy", "medium", "hard"],
+          default: "medium",
         },
         lastReviewed: {
-            type: Date,
-            default: null
+          type: Date,
+          default: null,
         },
         reviewCount: {
-            type: Number,
-            default: 0
+          type: Number,
+          default: 0,
         },
         isStarred: {
-            type: Boolean,
-            default: false
+          type: Boolean,
+          default: false,
         },
-    }]
-}, {
-    timestamps: true
-})
+      },
+    ],
+  },
+  {
+    timestamps: true,
+  },
+);
 
+flashcardSchema.index({ userId: 1, documentId: 1 });
 
-flashcardSchema.index({ userId: 1, documentId: 1 })
+const Flashcard = mongoose.model("Flashcard", flashcardSchema);
 
-const Flashcard = mongoose.model('Flashcard', flashcardSchema)
-
-export default Flashcard
+export default Flashcard;
