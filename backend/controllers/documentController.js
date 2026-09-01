@@ -18,41 +18,61 @@ export const uploadDocument = async (req, res, next) => {
         statusCode: 400,
       });
     }
+    // Validate title first
+    const { title } = req.body;
+    if (!title || title.trim() === "") {
+      await fs.unlink(req.file.path);
+      return res.status(400).json({
+        success: false,
+        error: "Please provide a title for the document",
+        statusCode: 400,
+      });
+    }
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
 
     // 1. Create the base document in your database
     const document = await Document.create({
-      user: req.user._id,
-      title: req.body.title || req.file.originalname,
-      fileName: req.file.filename,
+      userId: req.user._id,
+      title: title.trim(),
+      fileName: req.file.originalname,
       filePath: req.file.path,
+      fileUrl: fileUrl, // FIX 2: Added missing property to store it in DB
       fileSize: req.file.size,
-      mimeType: req.file.mimetype,
+      status: `processing`,
     });
-
-    // 2. Extract the massive text string from the physical file
-    console.log(`Parsing PDF: ${document.filePath}`);
-    const parsedPdf = await extractTextFromPDF(document.filePath);
-
-    // 3. Split the text into clean AI tokens (Awaiting the async chunker)
-    console.log("Splitting text into token chunks...");
-    const textChunks = chunkText(parsedPdf.text, 800, 100);
-
-    console.log(`Successfully generated ${textChunks.length} chunks.`);
-
-    // 4. Return the response to the user
-    // (You can pass the chunks back, or save them to your DB before returning)
+    processPDF(document._id, req.file.path).catch((err) => {
+      console.error("PDF processing error:", err);
+    });
     res.status(201).json({
       success: true,
-      data: {
-        document,
-        totalChunks: textChunks.length,
-        // chunks: textChunks // Optional: send to frontend if needed
-      },
-      message: "Document uploaded and processed successfully",
+      data: document,
+      message: "Document uploaded and processing",
     });
   } catch (error) {
-    // If the PDF parsing fails, clean up the database entry so you don't keep dead links
+    if (req.file) {
+      await fs.unlink(req.file.path).catch(() => {});
+    }
     next(error);
+  }
+};
+
+//Helper function to process the PDF in the background
+const processPDF = async (documentId, filePath) => {
+  try {
+    const { text } = await extractTextFromPDF(filePath);
+    const chunks = chunkText(text, 800, 100);
+    await Document.findByIdAndUpdate(documentId, {
+      extractedText: text,
+      chunks: chunks,
+      status: `ready`,
+    });
+    console.log(`Document ${documentId}processed successfully.`);
+  } catch (error) {
+    console.error(`Error processing document ${documentId}:`, error);
+    await Document.findByIdAndUpdate(documentId, {
+      status: `failed`,
+    });
   }
 };
 
@@ -61,13 +81,51 @@ export const uploadDocument = async (req, res, next) => {
 // @access Private
 export const getDocuments = async (req, res, next) => {
   try {
-    const documents = await Document.find({
-      user: req.user._id,
-    }).sort({ createdAt: -1 });
-
+    const documents = await Document.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(req.user._id),
+        },
+      },
+      {
+        $lookup: {
+          from: "flashcards",
+          localField: "_id",
+          foreignField: "documentId",
+          as: "flashcards",
+        },
+      },
+      {
+        $lookup: {
+          from: "quizzes",
+          localField: "_id",
+          foreignField: "documentId",
+          as: "quizzes",
+        },
+      },
+      {
+        $addFields: {
+          flashcardCount: { $size: "$flashcards" },
+          quizCount: { $size: "$quizzes" },
+        },
+      },
+      {
+        $project: {
+          extractedText: 0,
+          chunks: 0,
+          flashcardSets: 0,
+          quizzes: 0,
+          flashcards: 0,
+        },
+      },
+      {
+        $sort: { uploadDate: -1 },
+      },
+    ]);
     res.status(200).json({
       success: true,
       data: documents,
+      count: documents.length,
     });
   } catch (error) {
     next(error);
@@ -89,7 +147,7 @@ export const getDocument = async (req, res, next) => {
 
     const document = await Document.findOne({
       _id: req.params.id,
-      user: req.user._id,
+      userId: req.user._id,
     });
 
     if (!document) {
@@ -124,7 +182,7 @@ export const updateDocument = async (req, res, next) => {
 
     const document = await Document.findOne({
       _id: req.params.id,
-      user: req.user._id,
+      userId: req.user._id,
     });
 
     if (!document) {
@@ -165,10 +223,9 @@ export const deleteDocument = async (req, res, next) => {
         statusCode: 400,
       });
     }
-
     const document = await Document.findOne({
       _id: req.params.id,
-      user: req.user._id,
+      userId: req.user._id,
     });
 
     if (!document) {
@@ -192,12 +249,12 @@ export const deleteDocument = async (req, res, next) => {
 
     // Delete related flashcards
     await Flashcard.deleteMany({
-      document: document._id,
+      documentId: document._id, 
     });
 
     // Delete related quizzes
     await Quiz.deleteMany({
-      document: document._id,
+      documentId: document._id, 
     });
 
     res.status(200).json({

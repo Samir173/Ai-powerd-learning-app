@@ -12,59 +12,106 @@ export const chunkText = (text, maxChunkSize = 800, overlap = 100) => {
     return [];
   }
 
-  // 1. Local String Operation: Split text by sentence endings (. ! ?) using regular expressions
-  const sentences = text.split(/(?<=[.?!])\s+/);
+  // Make sure overlap is smaller than the chunk size
+  const safeOverlap = Math.min(overlap, Math.floor(maxChunkSize * 0.5));
+
+  // Clean extra spaces
+  const cleanedText = text.replace(/\s+/g, " ").trim();
+
+  // Split cleaned text into sentences
+  const sentences = cleanedText.split(/(?<=[.?!])\s+/);
 
   const finalChunks = [];
   let currentChunkText = "";
   let chunkIndex = 0;
 
-  for (const sentence of sentences) {
-    // Combine existing text chunk buffer with the new sentence
-    const testString = currentChunkText
-      ? `${currentChunkText} ${sentence}`
-      : sentence;
+  // Helper function to save chunks
+  const saveChunk = (chunk) => {
+    if (chunk && chunk.trim()) {
+      finalChunks.push({
+        text: chunk.trim(),
+        chunkIndex: chunkIndex++,
+      });
+    }
+  };
 
-    //A. If it safely fits within the configured maxChunkSize
+  for (const sentence of sentences) {
+    const cleanSentence = sentence.trim();
+
+    // Skip empty sentences
+    if (!cleanSentence) {
+      continue;
+    }
+
+    // -----------------------------------
+    // A. Handle sentences larger than maxChunkSize
+    // -----------------------------------
+    if (cleanSentence.length > maxChunkSize) {
+      // Save the current chunk first
+      if (currentChunkText.trim()) {
+        saveChunk(currentChunkText);
+        currentChunkText = "";
+      }
+
+      let start = 0;
+
+      // Move forward by maxChunkSize - overlap
+      const step = Math.max(maxChunkSize - safeOverlap, 1);
+
+      while (start < cleanSentence.length) {
+        const chunk = cleanSentence.slice(start, start + maxChunkSize);
+
+        // Stop when we reach the end
+        if (start + maxChunkSize >= cleanSentence.length) {
+          currentChunkText = chunk;
+          break;
+        }
+        // Save the chunk and move forward
+        saveChunk(chunk);
+        start += step;
+      }
+
+      continue;
+    }
+
+    // -----------------------------------
+    // B. Try adding the sentence to current chunk
+    // -----------------------------------
+    const testString = currentChunkText
+      ? `${currentChunkText} ${cleanSentence}`
+      : cleanSentence;
+
     if (testString.length <= maxChunkSize) {
+      // Sentence fits inside the current chunk
       currentChunkText = testString;
     } else {
-      // B. Save the text buffer before it spills over your limit
-      if (currentChunkText.trim()) {
-        finalChunks.push({
-          text: currentChunkText.trim(),
-          chunkIndex: chunkIndex++,
-        });
+      // -----------------------------------
+      // C. Current chunk is full, save it
+      // -----------------------------------
+      saveChunk(currentChunkText);
 
-        // LOCAL OVERLAP LOGIC: Extract trailing characters safely
-        const lookbackLength = Math.min(currentChunkText.length, overlap);
+      // Calculate how much overlap can fit
+      const availableSpace = maxChunkSize - cleanSentence.length - 1;
 
-        // Start the next chunk using the end of the previous chunk for natural context flow
+      const lookbackLength = Math.min(
+        currentChunkText.length,
+        safeOverlap,
+        Math.max(0, availableSpace),
+      );
+
+      // Start the next chunk with overlap + new sentence
+      if (lookbackLength > 0) {
         currentChunkText =
-          currentChunkText.slice(-lookbackLength) + " " + sentence;
+          currentChunkText.slice(-lookbackLength) + " " + cleanSentence;
       } else {
-        // C. Hard-slicing fallback for sentences that exceed maxChunkSize
-        let i = 0;
-        while (i < sentence.length) {
-          const hardSlice = sentence.slice(i, i + maxChunkSize);
-          finalChunks.push({
-            text: hardSlice.trim(),
-            chunkIndex: chunkIndex++,
-          });
-          i +=
-            maxChunkSize - overlap > 0 ? maxChunkSize - overlap : maxChunkSize;
-        }
-        currentChunkText = "";
+        currentChunkText = cleanSentence;
       }
     }
   }
 
-  // 2. Clear out any remaining trailing text blocks
+  // Save remaining text
   if (currentChunkText.trim()) {
-    finalChunks.push({
-      text: currentChunkText.trim(),
-      chunkIndex: chunkIndex++,
-    });
+    saveChunk(currentChunkText);
   }
 
   return finalChunks;
