@@ -157,54 +157,27 @@ export const getDocument = async (req, res, next) => {
         statusCode: 404,
       });
     }
-
-    res.status(200).json({
-      success: true,
-      data: document,
+    //Get flashcard and quiz counts
+    const flashcardCount = await Flashcard.countDocuments({
+      documentId: document._id,
+      userId: req.user._id
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc Update document
-// @route PUT /api/documents/:id
-// @access Private
-export const updateDocument = async (req, res, next) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid document ID",
-        statusCode: 400,
-      });
-    }
-
-    const document = await Document.findOne({
-      _id: req.params.id,
-      userId: req.user._id,
+    const quizCount = await Quiz.countDocuments({
+      documentId: document._id,
+      userId: req.user._id
     });
-
-    if (!document) {
-      return res.status(404).json({
-        success: false,
-        error: "Document not found",
-        statusCode: 404,
-      });
-    }
-
-    const { title } = req.body;
-
-    if (title) {
-      document.title = title;
-    }
-
+    //Update last accessed
+    document.lastAccessed = Date.now();
     await document.save();
 
+    //Combine document data with counts
+    const documentData = document.toObject();
+    documentData.flashcardCount = flashcardCount;
+    documentData.quizCount = quizCount;
+
     res.status(200).json({
       success: true,
       data: document,
-      message: "Document updated successfully",
     });
   } catch (error) {
     next(error);
@@ -239,7 +212,7 @@ export const deleteDocument = async (req, res, next) => {
     // Delete the uploaded file
     if (document.filePath) {
       try {
-        await fs.unlink(document.filePath);
+        await fs.unlink(document.filePath).catch(()=> {});
       } catch (error) {
         console.log("File could not be deleted:", error.message);
       }
