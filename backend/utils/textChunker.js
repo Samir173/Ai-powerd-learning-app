@@ -29,7 +29,8 @@ export const chunkText = (text, maxChunkSize = 800, overlap = 100) => {
   const saveChunk = (chunk) => {
     if (chunk && chunk.trim()) {
       finalChunks.push({
-        text: chunk.trim(),
+        content: chunk.trim(),
+        pageNumber: 0,
         chunkIndex: chunkIndex++,
       });
     }
@@ -115,4 +116,103 @@ export const chunkText = (text, maxChunkSize = 800, overlap = 100) => {
   }
 
   return finalChunks;
+};
+
+/** Find relevant chunks based on keyword matching
+ * @param {Array<Object>} chunks
+ * @param {string} query
+ * @param {number} maxChunks
+ * @returns {Array<Object<}
+ */
+export const findRelevantChunks = (chunks, query, maxChunks = 3) => {
+  if (!chunks || chunks.length === 0 || !query) {
+    return [];
+  }
+  //Common stop words to exclude
+  const stopWords = new Set([
+    "the",
+    "is",
+    "in",
+    "and",
+    "to",
+    "a",
+    "of",
+    "that",
+    "it",
+    "on",
+    "for",
+    "with",
+    "as",
+    "this",
+    "by",
+    "an",
+    "be",
+    "are",
+    "or",
+    "from",
+  ]);
+  //extract and clean query words
+  const queryWords = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !stopWords.has(word));
+  if (queryWords.length === 0) {
+    return chunks.slice(0, maxChunks).map((chunk) => ({
+      content: chunk.content,
+      chunkIndex: chunk.chunkIndex,
+      pageNumber: chunk.pageNumber,
+      _id: chunk._id,
+    }));
+  }
+  const scoredChunks = chunks.map((chunk, index) => {
+    const content = chunk.content.toLowerCase();
+    const contentWords = content.split(/\s+/).length;
+    let score = 0;
+    // Check every query word
+    for (const word of queryWords) {
+       const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      //Exact word match
+      const exactMatches = (
+        content.match(new RegExp(`\\b${escapedWord}\\b`, "g")) || []
+      ).length;
+      score += exactMatches * 3;
+
+      //Partial match
+      const partialMatches = (
+        content.match(new RegExp(escapedWord, "g")) || []
+      ).length;
+      score += Math.max(0, partialMatches - exactMatches) * 1.5;
+    }
+    //Multiple word found 
+    const uniqueWordsFound = queryWords.filter(word => 
+      content.includes(word)
+    ).length;
+    if (uniqueWordsFound > 1){
+      score += uniqueWordsFound *2;
+    }
+    const normalizedScore = score / Math.sqrt(contentWords);
+    const positionBouns = 1- (index / chunks.length) * 0.1;
+    return{
+      content: chunk.content,
+      chunkIndex: chunk.chunkIndex,
+      pageNumber: chunk.pageNumber,
+      _id: chunk._id,
+      score: normalizedScore * positionBouns,
+      rawScore: score,
+      matchedWords: uniqueWordsFound
+    };
+  });
+
+  return scoredChunks
+    .filter(chunk => chunk.score > 0)
+    .sort ((a,b) => {
+      if(b.score !== a.score){
+        return b.score - a.score
+      }
+      if(b.matchedWords !== a.matchedWords){
+        return b.matchedWords - a.matchedWords
+      }
+      return a.chunkIndex - b.chunkIndex;
+    })
+    .slice(0, maxChunks);
 };

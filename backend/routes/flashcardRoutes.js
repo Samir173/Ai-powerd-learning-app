@@ -2,7 +2,7 @@ import express from "express";
 import {
   getFlashcards,
   getAllFlashcardSets,
-  reviewFlashcard,
+  markFlashcardAsReviewed,
   toggleStarFlashcard,
   deleteFlashcardSets,
 } from "../controllers/flashcardController.js";
@@ -14,7 +14,7 @@ router.use(protect);
 
 router.get("/", getAllFlashcardSets);
 router.get("/:documentId", getFlashcards);
-router.post("/:cardId/review", reviewFlashcard);
+router.post("/:cardId/review", markFlashcardAsReviewed);
 router.put("/:cardId/star", toggleStarFlashcard);
 router.delete("/:id", deleteFlashcardSets);
 

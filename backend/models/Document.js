@@ -20,6 +20,10 @@ const documentSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    fileUrl: {
+      type: String,
+      required: true,
+    },
     fileSize: {
       type: Number,
       required: true,
@@ -44,7 +48,7 @@ const documentSchema = new mongoose.Schema(
         },
       },
     ],
-    uploadData: {
+    uploadDate: {
       type: Date,
       default: Date.now,
     },
