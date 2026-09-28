@@ -122,7 +122,7 @@ export const chunkText = (text, maxChunkSize = 800, overlap = 100) => {
  * @param {Array<Object>} chunks
  * @param {string} query
  * @param {number} maxChunks
- * @returns {Array<Object<}
+ * @returns {Array<Object>}
  */
 export const findRelevantChunks = (chunks, query, maxChunks = 3) => {
   if (!chunks || chunks.length === 0 || !query) {
@@ -170,7 +170,7 @@ export const findRelevantChunks = (chunks, query, maxChunks = 3) => {
     let score = 0;
     // Check every query word
     for (const word of queryWords) {
-       const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       //Exact word match
       const exactMatches = (
         content.match(new RegExp(`\\b${escapedWord}\\b`, "g")) || []
@@ -178,39 +178,38 @@ export const findRelevantChunks = (chunks, query, maxChunks = 3) => {
       score += exactMatches * 3;
 
       //Partial match
-      const partialMatches = (
-        content.match(new RegExp(escapedWord, "g")) || []
-      ).length;
+      const partialMatches = (content.match(new RegExp(escapedWord, "g")) || [])
+        .length;
       score += Math.max(0, partialMatches - exactMatches) * 1.5;
     }
-    //Multiple word found 
-    const uniqueWordsFound = queryWords.filter(word => 
-      content.includes(word)
+    //Multiple word found
+    const uniqueWordsFound = queryWords.filter((word) =>
+      content.includes(word),
     ).length;
-    if (uniqueWordsFound > 1){
-      score += uniqueWordsFound *2;
+    if (uniqueWordsFound > 1) {
+      score += uniqueWordsFound * 2;
     }
     const normalizedScore = score / Math.sqrt(contentWords);
-    const positionBouns = 1- (index / chunks.length) * 0.1;
-    return{
+    const positionBouns = 1 - (index / chunks.length) * 0.1;
+    return {
       content: chunk.content,
       chunkIndex: chunk.chunkIndex,
       pageNumber: chunk.pageNumber,
       _id: chunk._id,
       score: normalizedScore * positionBouns,
       rawScore: score,
-      matchedWords: uniqueWordsFound
+      matchedWords: uniqueWordsFound,
     };
   });
 
   return scoredChunks
-    .filter(chunk => chunk.score > 0)
-    .sort ((a,b) => {
-      if(b.score !== a.score){
-        return b.score - a.score
+    .filter((chunk) => chunk.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
       }
-      if(b.matchedWords !== a.matchedWords){
-        return b.matchedWords - a.matchedWords
+      if (b.matchedWords !== a.matchedWords) {
+        return b.matchedWords - a.matchedWords;
       }
       return a.chunkIndex - b.chunkIndex;
     })
