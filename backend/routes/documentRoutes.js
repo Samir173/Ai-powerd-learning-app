@@ -4,9 +4,9 @@ import{
     getDocuments,
     getDocument,
     deleteDocument,
-} from "../controllers/documentController"
-import protect from "../middleware/auth"
-import upload from "../config/multer"
+} from "../controllers/documentController.js"
+import protect from "../middleware/auth.js"
+import upload from "../config/multer.js"
 
 const router = express.Router();
 
